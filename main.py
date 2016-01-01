@@ -46,9 +46,12 @@ def grep(pattern, haystack):
         proc.stdin.write(haystack)
         proc.stdin.write(b'\n')
         proc.stdin.flush()
+        proc.stdin.close()
         
         for result0 in proc.stdout:
+        
             return True
+            
         return False
     
 def main():
@@ -90,16 +93,18 @@ def main():
                 
                 #print(result0)
                 #print (result, result[:1], result[:1] == b'*', result.endswith(b'has joined\n'))
-                if result[:1] == b'*' and result.endswith(b'has joined\n'):
+                if result[:1] == b'*' and result.endswith(b'has joined\n') or result.endswith(b'has left\n'):
                     _,_,nick = result.partition(b'*\t')
                     nick,_,_ = nick.partition(b' ')
                     _,_,hostmask = result.partition(b'(')
                     hostmask,_,_ = hostmask.partition(b')')
                     ircusername,_,hostmask = hostmask.partition(b'@')
-                    result = JoinResult(pattern=pattern, line=result0, nick=nick, username=ircusername, t=result_date, hostmask=hostmask)
                     
-                    if pattern.type == 'nick' or pattern.type == 'hostmask':
-                        pattern.results += [result]
+                    if result.endswith(b'has joined\n'):
+                        result = JoinResult(pattern=pattern, line=result0, nick=nick, username=ircusername, t=result_date, hostmask=hostmask)
+                        
+                        if pattern.type == 'nick' or pattern.type == 'hostmask':
+                            pattern.results += [result]
                 elif result[:1] == b'<':
                     nick,_,result = result[1:].partition(b'>')
                     
@@ -107,6 +112,30 @@ def main():
                     
                     if pattern.type == 'nick' and grep(pattern.pattern, nick):
                         pattern.results += [result]
+                elif result[:1] == b'*' and result.partition(b' ')[2].startswith(b'has quit ('):
+                    continue
+                elif result[:1] == b'*' and result.partition(b' ')[2].startswith(b'is now known as '):
+                    continue
+                elif result.startswith(b'*\tChanServ gives voice to\n'):
+                    #it is autovoice
+                    continue
+                elif result.startswith(b'-ChanServ-') or result.startswith(b'-NickServ-'):
+                    #it is a NOTICE
+                    continue
+                elif result[:1] == b'*':
+                    #some sort of action
+                    _,_,result = result.partition(b'\t')
+                    nick,_,result = result.partition(b' ')
+                    
+                    if pattern.type == 'nick':
+                        if grep(pattern.pattern, nick):
+                            #pattern did action
+                            print (result)
+                            continue
+                        else:
+                            #action happened to pattern
+                            continue
+                    
                 else:
                     print (result)
 
